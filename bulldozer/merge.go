@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-github/v74/github"
+	"github.com/google/go-github/v79/github"
 	"github.com/palantir/bulldozer/pull"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -74,9 +74,10 @@ func (m *GitHubMerger) ffOnlyMerge(ctx context.Context, pullCtx pull.Context) (s
 	}
 
 	headCommitSHA := pullCtx.HeadSHA()
-	ref.Object.SHA = &headCommitSHA
-
-	newRef, _, err := m.client.Git.UpdateRef(ctx, pullCtx.Owner(), pullCtx.Repo(), ref, false)
+	newRef, _, err := m.client.Git.UpdateRef(ctx, pullCtx.Owner(), pullCtx.Repo(), ref.GetRef(), github.UpdateRef{
+		SHA:   headCommitSHA,
+		Force: github.Ptr(false),
+	})
 	if err != nil {
 		return "", errors.Wrap(err, "could not perform ff-only merge")
 	}
