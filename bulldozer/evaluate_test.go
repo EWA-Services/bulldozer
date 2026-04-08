@@ -326,6 +326,74 @@ func TestShouldMerge(t *testing.T) {
 		require.Nil(t, err)
 		assert.True(t, actualShouldMerge)
 	})
+
+	// Rulesets-related test cases: these exercise the evaluate logic
+	// with required statuses that would come from rulesets in production.
+	// The mock returns whatever is set in RequiredStatusesValue regardless
+	// of whether it originates from rulesets or classic branch protection.
+
+	t.Run("rulesetsProvideRequiredChecksAllPass", func(t *testing.T) {
+		pc := &pulltest.MockPullContext{
+			LabelValue:            []string{"LABEL_MERGE"},
+			RequiredStatusesValue: []string{"ci/build", "ci/lint", "ci/test"},
+			SuccessStatusesValue:  []string{"ci/build", "ci/lint", "ci/test"},
+		}
+
+		actualShouldMerge, err := ShouldMergePR(ctx, pc, mergeConfig)
+
+		require.Nil(t, err)
+		assert.True(t, actualShouldMerge)
+	})
+
+	t.Run("rulesetsProvideRequiredChecksSomeFailing", func(t *testing.T) {
+		pc := &pulltest.MockPullContext{
+			LabelValue:            []string{"LABEL_MERGE"},
+			RequiredStatusesValue: []string{"ci/build", "ci/lint", "ci/test"},
+			SuccessStatusesValue:  []string{"ci/build"},
+		}
+
+		actualShouldMerge, err := ShouldMergePR(ctx, pc, mergeConfig)
+
+		require.Nil(t, err)
+		assert.False(t, actualShouldMerge)
+	})
+
+	t.Run("rulesetsEmptyClassicFallbackProvideChecks", func(t *testing.T) {
+		// When rulesets return empty, classic branch protection provides checks.
+		// At the mock level, RequiredStatusesValue represents whichever source
+		// provided the checks (in production, the fallback logic in GithubContext).
+		pc := &pulltest.MockPullContext{
+			LabelValue:            []string{"LABEL_MERGE"},
+			RequiredStatusesValue: []string{"StatusCheckA", "StatusCheckB"},
+			SuccessStatusesValue:  []string{"StatusCheckA", "StatusCheckB"},
+		}
+
+		actualShouldMerge, err := ShouldMergePR(ctx, pc, mergeConfig)
+
+		require.Nil(t, err)
+		assert.True(t, actualShouldMerge)
+	})
+
+	t.Run("bothEmptyNoChecksDisallowed", func(t *testing.T) {
+		// When both rulesets and classic return empty, and AllowMergeWithNoChecks
+		// is false, the PR should not be merged.
+		noChecksConfig := MergeConfig{
+			Trigger: Signals{
+				Labels: []string{"LABEL_MERGE"},
+			},
+			AllowMergeWithNoChecks: false,
+		}
+		pc := &pulltest.MockPullContext{
+			LabelValue:            []string{"LABEL_MERGE"},
+			RequiredStatusesValue: nil,
+			SuccessStatusesValue:  nil,
+		}
+
+		actualShouldMerge, err := ShouldMergePR(ctx, pc, noChecksConfig)
+
+		require.Nil(t, err)
+		assert.False(t, actualShouldMerge)
+	})
 }
 
 func TestShouldUpdatePR(t *testing.T) {

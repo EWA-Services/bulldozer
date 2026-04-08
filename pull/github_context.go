@@ -21,6 +21,7 @@ import (
 
 	"github.com/google/go-github/v74/github"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 )
 
 // GithubContext is a Context implementation that gets information from GitHub.
@@ -37,6 +38,7 @@ type GithubContext struct {
 	comments         []string
 	commits          []*Commit
 	branchProtection *github.Protection
+	branchRules      *github.BranchRules
 	successStatuses  []string
 }
 
@@ -164,6 +166,20 @@ func (ghc *GithubContext) Commits(ctx context.Context) ([]*Commit, error) {
 }
 
 func (ghc *GithubContext) RequiredStatuses(ctx context.Context) ([]string, error) {
+	logger := zerolog.Ctx(ctx)
+
+	// Try rulesets first
+	rulesetStatuses, err := ghc.requiredStatusesFromRulesets(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(rulesetStatuses) > 0 {
+		logger.Debug().Msgf("Using %d required status checks from rulesets for %s", len(rulesetStatuses), ghc.Locator())
+		return rulesetStatuses, nil
+	}
+
+	// Fall back to classic branch protection
+	logger.Debug().Msgf("No ruleset status checks found for %s, falling back to classic branch protection", ghc.Locator())
 	if ghc.branchProtection == nil {
 		if err := ghc.loadBranchProtection(ctx); err != nil {
 			return nil, err
@@ -173,6 +189,47 @@ func (ghc *GithubContext) RequiredStatuses(ctx context.Context) ([]string, error
 		return checks.GetContexts(), nil
 	}
 	return nil, nil
+}
+
+func (ghc *GithubContext) loadRulesForBranch(ctx context.Context) error {
+	if ghc.branchRules != nil {
+		return nil
+	}
+
+	rules, _, err := ghc.client.Repositories.GetRulesForBranch(ctx, ghc.owner, ghc.repo, ghc.pr.GetBase().GetRef(), nil)
+	if err != nil {
+		if isNotFound(err) {
+			ghc.branchRules = &github.BranchRules{}
+			return nil
+		}
+		if isForbidden(err) {
+			logger := zerolog.Ctx(ctx)
+			logger.Warn().Msgf("Cannot read rulesets due to insufficient permissions, falling back to classic branch protection for %s", ghc.Locator())
+			ghc.branchRules = &github.BranchRules{}
+			return nil
+		}
+		return errors.Wrapf(err, "cannot get branch rules for %s", ghc.Locator())
+	}
+	ghc.branchRules = rules
+	return nil
+}
+
+func (ghc *GithubContext) requiredStatusesFromRulesets(ctx context.Context) ([]string, error) {
+	if err := ghc.loadRulesForBranch(ctx); err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]struct{})
+	var statuses []string
+	for _, rule := range ghc.branchRules.RequiredStatusChecks {
+		for _, check := range rule.Parameters.RequiredStatusChecks {
+			if _, ok := seen[check.Context]; !ok {
+				seen[check.Context] = struct{}{}
+				statuses = append(statuses, check.Context)
+			}
+		}
+	}
+	return statuses, nil
 }
 
 func (ghc *GithubContext) PushRestrictions(ctx context.Context) (bool, error) {
@@ -203,6 +260,11 @@ func (ghc *GithubContext) loadBranchProtection(ctx context.Context) error {
 func isNotFound(err error) bool {
 	rerr, ok := err.(*github.ErrorResponse)
 	return ok && rerr.Response.StatusCode == http.StatusNotFound
+}
+
+func isForbidden(err error) bool {
+	rerr, ok := err.(*github.ErrorResponse)
+	return ok && rerr.Response.StatusCode == http.StatusForbidden
 }
 
 func (ghc *GithubContext) CurrentSuccessStatuses(ctx context.Context) ([]string, error) {
