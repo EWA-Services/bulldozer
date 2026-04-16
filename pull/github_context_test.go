@@ -1,4 +1,4 @@
-// Copyright 2026 EWA-Services, Inc.
+// Copyright 2026 Palantir Technologies, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ func TestGithubContextRequiredStatusesUsesRulesetsFirst(t *testing.T) {
 		switch r.URL.Path {
 		case "/repos/owner/repo/rules/branches/main":
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, `[{"type":"required_status_checks","ruleset_source_type":"Repository","ruleset_source":"repo","ruleset_id":1,"parameters":{"required_status_checks":[{"context":"ci/build"},{"context":"ci/lint"},{"context":"ci/build"}],"strict_required_status_checks_policy":true}}]`)
+			mustWriteString(t, w, `[{"type":"required_status_checks","ruleset_source_type":"Repository","ruleset_source":"repo","ruleset_id":1,"parameters":{"required_status_checks":[{"context":"ci/build"},{"context":"ci/lint"},{"context":"ci/build"}],"strict_required_status_checks_policy":true}}]`)
 		case "/repos/owner/repo/branches/main/protection":
 			t.Fatalf("branch protection fallback should not be called when rulesets return required checks")
 		default:
@@ -62,9 +62,9 @@ func TestGithubContextRequiredStatusesFallsBackOnForbiddenRulesets(t *testing.T)
 		switch r.URL.Path {
 		case "/repos/owner/repo/rules/branches/main":
 			w.WriteHeader(http.StatusForbidden)
-			fmt.Fprint(w, `{"message":"forbidden"}`)
+			mustWriteString(t, w, `{"message":"forbidden"}`)
 		case "/repos/owner/repo/branches/main/protection":
-			fmt.Fprint(w, `{"required_status_checks":{"strict":false,"contexts":["ci/legacy"]}}`)
+			mustWriteString(t, w, `{"required_status_checks":{"strict":false,"contexts":["ci/legacy"]}}`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -88,9 +88,9 @@ func TestGithubContextRequiredStatusesFallsBackToBranchProtectionChecks(t *testi
 
 		switch r.URL.Path {
 		case "/repos/owner/repo/rules/branches/main":
-			fmt.Fprint(w, `[]`)
+			mustWriteString(t, w, `[]`)
 		case "/repos/owner/repo/branches/main/protection":
-			fmt.Fprint(w, `{"required_status_checks":{"strict":false,"checks":[{"context":"ci/check"},{"context":"ci/check"}]}}`)
+			mustWriteString(t, w, `{"required_status_checks":{"strict":false,"checks":[{"context":"ci/check"},{"context":"ci/check"}]}}`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -115,9 +115,9 @@ func TestGithubContextRequiredStatusesRecordsNoChecksWhenBothSourcesEmpty(t *tes
 		switch r.URL.Path {
 		case "/repos/owner/repo/rules/branches/main":
 			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprint(w, `{"message":"not found"}`)
+			mustWriteString(t, w, `{"message":"not found"}`)
 		case "/repos/owner/repo/branches/main/protection":
-			fmt.Fprint(w, `{}`)
+			mustWriteString(t, w, `{}`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -175,4 +175,11 @@ func assertCounterCount(t *testing.T, registry metrics.Registry, key string, exp
 	counter, ok := metric.(metrics.Counter)
 	require.Truef(t, ok, "metric %s is not a counter", key)
 	assert.Equal(t, expected, counter.Count(), "unexpected counter value for %s", key)
+}
+
+func mustWriteString(t *testing.T, w http.ResponseWriter, body string) {
+	t.Helper()
+
+	_, err := fmt.Fprint(w, body)
+	require.NoError(t, err)
 }
