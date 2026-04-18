@@ -20,7 +20,22 @@ import (
 	"net/http"
 
 	"github.com/google/go-github/v84/github"
+	"github.com/palantir/go-baseapp/baseapp"
 	"github.com/pkg/errors"
+	"github.com/rcrowley/go-metrics"
+	"github.com/rs/zerolog"
+)
+
+const (
+	requiredStatusesSourceRulesetsKey            = "pull.required_statuses.source.rulesets"
+	requiredStatusesSourceBranchProtectionKey    = "pull.required_statuses.source.branch_protection"
+	requiredStatusesSourceNoneKey                = "pull.required_statuses.source.none"
+	requiredStatusesTotalRulesetsKey             = "pull.required_statuses.total.rulesets"
+	requiredStatusesTotalBranchProtectionKey     = "pull.required_statuses.total.branch_protection"
+	requiredStatusesRulesetsFallbackEmptyKey     = "pull.required_statuses.rulesets_fallback.empty"
+	requiredStatusesRulesetsFallbackNotFoundKey  = "pull.required_statuses.rulesets_fallback.not_found"
+	requiredStatusesRulesetsFallbackForbiddenKey = "pull.required_statuses.rulesets_fallback.forbidden"
+	requiredStatusesRulesetsErrorKey             = "pull.required_statuses.rulesets.errors"
 )
 
 // GithubContext is a Context implementation that gets information from GitHub.
@@ -34,10 +49,12 @@ type GithubContext struct {
 	pr     *github.PullRequest
 
 	// cached fields
-	comments         []string
-	commits          []*Commit
-	branchProtection *github.Protection
-	successStatuses  []string
+	comments               []string
+	commits                []*Commit
+	branchProtection       *github.Protection
+	branchRules            *github.BranchRules
+	rulesetsFallbackMetric string
+	successStatuses        []string
 }
 
 func NewGithubContext(client *github.Client, pr *github.PullRequest) Context {
@@ -164,15 +181,82 @@ func (ghc *GithubContext) Commits(ctx context.Context) ([]*Commit, error) {
 }
 
 func (ghc *GithubContext) RequiredStatuses(ctx context.Context) ([]string, error) {
+	logger := zerolog.Ctx(ctx)
+
+	rulesetStatuses, err := ghc.requiredStatusesFromRulesets(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(rulesetStatuses) > 0 {
+		recordRequiredStatuses(ctx, requiredStatusesSourceRulesetsKey, requiredStatusesTotalRulesetsKey, len(rulesetStatuses))
+		logger.Debug().Msgf("Using %d required status checks from rulesets for %s", len(rulesetStatuses), ghc.Locator())
+		return rulesetStatuses, nil
+	}
+
+	fallbackMetric := ghc.rulesetsFallbackMetric
+	if fallbackMetric == "" {
+		fallbackMetric = requiredStatusesRulesetsFallbackEmptyKey
+	}
+	incrementCounter(ctx, fallbackMetric, 1)
+	logger.Debug().Msgf("No ruleset status checks found for %s, falling back to classic branch protection", ghc.Locator())
+
 	if ghc.branchProtection == nil {
 		if err := ghc.loadBranchProtection(ctx); err != nil {
 			return nil, err
 		}
 	}
-	if checks := ghc.branchProtection.GetRequiredStatusChecks(); checks != nil {
-		return checks.GetContexts(), nil
+
+	branchProtectionStatuses := requiredStatusesFromBranchProtection(ghc.branchProtection)
+	if len(branchProtectionStatuses) > 0 {
+		recordRequiredStatuses(ctx, requiredStatusesSourceBranchProtectionKey, requiredStatusesTotalBranchProtectionKey, len(branchProtectionStatuses))
+		return branchProtectionStatuses, nil
 	}
+
+	incrementCounter(ctx, requiredStatusesSourceNoneKey, 1)
 	return nil, nil
+}
+
+func (ghc *GithubContext) loadRulesForBranch(ctx context.Context) error {
+	if ghc.branchRules != nil {
+		return nil
+	}
+
+	rules, _, err := ghc.client.Repositories.GetRulesForBranch(ctx, ghc.owner, ghc.repo, ghc.pr.GetBase().GetRef(), nil)
+	if err != nil {
+		switch {
+		case isNotFound(err):
+			ghc.branchRules = &github.BranchRules{}
+			ghc.rulesetsFallbackMetric = requiredStatusesRulesetsFallbackNotFoundKey
+			return nil
+		case isForbidden(err):
+			zerolog.Ctx(ctx).Warn().Msgf("Cannot read rulesets due to insufficient permissions, falling back to classic branch protection for %s", ghc.Locator())
+			ghc.branchRules = &github.BranchRules{}
+			ghc.rulesetsFallbackMetric = requiredStatusesRulesetsFallbackForbiddenKey
+			return nil
+		default:
+			incrementCounter(ctx, requiredStatusesRulesetsErrorKey, 1)
+			return errors.Wrapf(err, "cannot get branch rules for %s", ghc.Locator())
+		}
+	}
+
+	ghc.branchRules = rules
+	ghc.rulesetsFallbackMetric = ""
+	return nil
+}
+
+func (ghc *GithubContext) requiredStatusesFromRulesets(ctx context.Context) ([]string, error) {
+	if err := ghc.loadRulesForBranch(ctx); err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]struct{})
+	var statuses []string
+	for _, rule := range ghc.branchRules.RequiredStatusChecks {
+		for _, check := range rule.Parameters.RequiredStatusChecks {
+			appendUniqueStatus(seen, &statuses, check.Context)
+		}
+	}
+	return statuses, nil
 }
 
 func (ghc *GithubContext) PushRestrictions(ctx context.Context) (bool, error) {
@@ -203,6 +287,11 @@ func (ghc *GithubContext) loadBranchProtection(ctx context.Context) error {
 func isNotFound(err error) bool {
 	rerr, ok := err.(*github.ErrorResponse)
 	return ok && rerr.Response.StatusCode == http.StatusNotFound
+}
+
+func isForbidden(err error) bool {
+	rerr, ok := err.(*github.ErrorResponse)
+	return ok && rerr.Response.StatusCode == http.StatusForbidden
 }
 
 func (ghc *GithubContext) CurrentSuccessStatuses(ctx context.Context) ([]string, error) {
@@ -256,6 +345,51 @@ func (ghc *GithubContext) CurrentSuccessStatuses(ctx context.Context) ([]string,
 	}
 
 	return ghc.successStatuses, nil
+}
+
+func requiredStatusesFromBranchProtection(protection *github.Protection) []string {
+	if protection == nil {
+		return nil
+	}
+
+	checks := protection.GetRequiredStatusChecks()
+	if checks == nil {
+		return nil
+	}
+
+	seen := make(map[string]struct{})
+	var statuses []string
+	if checks.Contexts != nil {
+		for _, context := range *checks.Contexts {
+			appendUniqueStatus(seen, &statuses, context)
+		}
+	}
+	if checks.Checks != nil {
+		for _, check := range *checks.Checks {
+			appendUniqueStatus(seen, &statuses, check.Context)
+		}
+	}
+	return statuses
+}
+
+func appendUniqueStatus(seen map[string]struct{}, statuses *[]string, status string) {
+	if status == "" {
+		return
+	}
+	if _, ok := seen[status]; ok {
+		return
+	}
+	seen[status] = struct{}{}
+	*statuses = append(*statuses, status)
+}
+
+func recordRequiredStatuses(ctx context.Context, sourceMetric, totalMetric string, count int) {
+	incrementCounter(ctx, sourceMetric, 1)
+	incrementCounter(ctx, totalMetric, int64(count))
+}
+
+func incrementCounter(ctx context.Context, key string, delta int64) {
+	metrics.GetOrRegisterCounter(key, baseapp.MetricsCtx(ctx)).Inc(delta)
 }
 
 func (ghc *GithubContext) Branches() (base string, head string) {

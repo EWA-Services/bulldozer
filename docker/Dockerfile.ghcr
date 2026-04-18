@@ -1,0 +1,28 @@
+FROM golang:1.25-bookworm AS builder
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-s -w -X github.com/palantir/bulldozer/version.version=$(git describe --tags --always --dirty 2>/dev/null || echo dev)" \
+    -o /bulldozer .
+
+FROM scratch
+
+STOPSIGNAL SIGINT
+
+# TLS certificates for HTTPS calls
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+# Default configuration
+COPY config/bulldozer.example.yml /secrets/bulldozer.yml
+
+# Application binary
+COPY --from=builder /bulldozer /bulldozer
+
+ENTRYPOINT ["/bulldozer"]
+CMD ["server", "--config", "/secrets/bulldozer.yml"]
