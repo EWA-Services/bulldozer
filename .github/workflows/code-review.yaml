@@ -73,14 +73,14 @@ on:
         default: ""
         type: string
       claude_version:
-        description: Claude Code version to install for direct CLI runs
+        description: Pinned Claude Code version to install for direct CLI runs
         required: true
         default: 2.1.73
         type: string
       claude_model:
         description: Claude model to use for direct CLI runs
         required: true
-        default: claude-opus-4-5-20251101
+        default: claude-opus-4-7
         type: string
       claude_effort:
         description: Claude effort level for direct CLI runs (low|medium|high|xhigh|max)
@@ -88,7 +88,7 @@ on:
         default: max
         type: string
       codex_version:
-        description: Codex CLI version to install for direct CLI runs
+        description: Pinned Codex CLI version to install for direct CLI runs
         required: true
         default: 0.114.0
         type: string
@@ -127,9 +127,10 @@ jobs:
         id: check-welcome
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          existing_count="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${{ github.event.pull_request.number }}/comments" --jq '[.[] | select(.body | contains("**Code Review Assistant**"))] | length')"
+          existing_count="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --jq '[.[] | select(.body | contains("**Code Review Assistant**"))] | length')"
           if [ "${existing_count}" -gt 0 ]; then
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
@@ -140,13 +141,14 @@ jobs:
         if: steps.check-welcome.outputs.found == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          gh pr comment ${{ github.event.pull_request.number }} --body "$(cat <<'EOF'
+          gh pr comment "$PR_NUMBER" --body "$(cat <<'EOF'
           🤖 **Code Review Assistant**
 
-          This PR supports direct CLI reviews from both providers:
-          - `@finn-claude` for Claude Code direct CLI review
-          - `@finn-codex` for Codex CLI review
+          AI-powered reviews via direct CLI from both providers:
+          - `@finn-claude` — **Claude Opus 4.7** (effort=max)
+          - `@finn-codex` — **GPT-5.4** (reasoning=xhigh)
 
           **How to trigger a review:**
           - Mention `@finn-claude` or `@finn-codex` in a PR comment for questions or an on-demand review
@@ -156,6 +158,7 @@ jobs:
           - Full reviews inspect the diff and surrounding code
           - Inline comments are reserved for actionable issues that should be fixed
           - Summary comments explain findings or explicitly state when no actionable findings were found
+          - After a full review, `@finn-claude` submits a formal **APPROVE** or **REQUEST_CHANGES** review when gates pass (zero unresolved review threads + all other CI checks passing)
 
           _Note: Reviews are mention-only. This workflow does not auto-review on ready-for-review._
           EOF
@@ -245,7 +248,7 @@ jobs:
               "file_path": "",
               "line_number": "",
               "claude_version": os.environ.get("CLAUDE_VERSION_INPUT") or "2.1.73",
-              "claude_model": os.environ.get("CLAUDE_MODEL_INPUT") or "claude-opus-4-5-20251101",
+              "claude_model": os.environ.get("CLAUDE_MODEL_INPUT") or "claude-opus-4-7",
               "claude_effort": os.environ.get("CLAUDE_EFFORT_INPUT") or "max",
               "codex_version": os.environ.get("CODEX_VERSION_INPUT") or "0.114.0",
               "codex_model": os.environ.get("CODEX_MODEL_INPUT") or "gpt-5.4",
@@ -641,7 +644,8 @@ jobs:
                   The prepared summary comment body must:
                   - summarize the most important findings
                   - explicitly say when no actionable findings were found
-                  - not approve or request changes formally
+                  - keep prose neutral; the formal review action (APPROVE / REQUEST_CHANGES)
+                    is handled by the workflow based on your structured `verdict` JSON field
                   - not include the hidden marker itself
 
                   If you cannot confidently place an inline comment on a diff line, put that note
@@ -734,7 +738,16 @@ jobs:
               - When a finding depends on external or time-sensitive facts, validate it with
                 `pplx` before you post the finding. Prefer constraining searches to primary
                 sources such as official docs or release notes.
-              - Do not approve or request changes formally in this workflow. Use comments/replies.
+              - When you perform a full review (pr_event ready_for_review trigger, or a
+                pr_comment trigger that asked for a review), declare a `verdict` in the
+                structured JSON output: "APPROVE" if the PR is merge-ready with no
+                actionable findings, "REQUEST_CHANGES" if there are blockers that must be
+                fixed before merge. For inline_comment triggers and any pr_comment trigger
+                that did NOT result in a full review, set verdict to "NONE".
+              - The workflow itself submits the formal `gh pr review` action based on your
+                verdict; do NOT call `gh pr review --approve` or `--request-changes` yourself.
+                The workflow re-validates gates (zero unresolved review threads, all other
+                CI checks passing) before acting on APPROVE.
 
               Useful command patterns:
               - Inspect PR metadata and files:
@@ -772,7 +785,7 @@ jobs:
               {trigger_instructions}
 
               After you finish, output EXACTLY one machine-readable line using this JSON schema:
-              {output_prefix}::{{"triggerType":"pr_event|pr_comment|inline_comment","fullReviewPerformed":true|false,"summaryFileWritten":true|false,"inlineReplyPosted":true|false,"inlineCommentsCreated":0,"success":true|false,"notes":["string"]}}
+              {output_prefix}::{{"triggerType":"pr_event|pr_comment|inline_comment","fullReviewPerformed":true|false,"summaryFileWritten":true|false,"inlineReplyPosted":true|false,"inlineCommentsCreated":0,"verdict":"APPROVE|REQUEST_CHANGES|NONE","verdictReason":"<short rationale required when verdict != NONE>","success":true|false,"notes":["string"]}}
 
               Rules:
               - Set success=true only if you completed the expected GitHub action for this trigger.
@@ -780,6 +793,12 @@ jobs:
               - Set summaryFileWritten=true only when you wrote a top-level PR comment body to {summary_file_path}.
               - Set inlineReplyPosted=true only when you posted a threaded reply to an inline review comment.
               - inlineCommentsCreated must be an integer count.
+              - Set verdict="APPROVE" only when fullReviewPerformed=true AND there are no
+                actionable inline findings AND no blockers in the summary. Set
+                verdict="REQUEST_CHANGES" when fullReviewPerformed=true AND blockers exist
+                that must be fixed before merge. Set verdict="NONE" otherwise (any trigger
+                where you did not perform a full review).
+              - Provide verdictReason whenever verdict != "NONE" (one short sentence).
               - Never include the hidden marker inside {summary_file_path}; the wrapper injects it.
               - Put any execution caveats or skipped actions in notes.
               - Do not include any extra prose before or after the {output_prefix} line.
@@ -798,7 +817,11 @@ jobs:
       - name: Install Claude Code CLI
         run: |
           set -euo pipefail
-          npm install -g --ignore-scripts "@anthropic-ai/claude-code@${CLAUDE_POC_VERSION}"
+          if [[ "$CLAUDE_POC_VERSION" != "2.1.73" ]]; then
+            echo "::error::Unsupported Claude Code version: $CLAUDE_POC_VERSION. Update the pinned npm install before changing it." >&2
+            exit 1
+          fi
+          npm install -g --ignore-scripts "@anthropic-ai/claude-code@2.1.73"
           claude --version
 
       - name: Run Claude CLI directly
@@ -871,6 +894,16 @@ jobs:
           full_review="$(jq -r '.fullReviewPerformed' claude-review.json)"
           summary_file_written="$(jq -r '.summaryFileWritten' claude-review.json)"
           inline_reply_posted="$(jq -r '.inlineReplyPosted' claude-review.json)"
+          verdict="$(jq -r '.verdict // "NONE"' claude-review.json)"
+          verdict_reason="$(jq -r '.verdictReason // ""' claude-review.json)"
+
+          case "$verdict" in
+            APPROVE|REQUEST_CHANGES|NONE) ;;
+            *)
+              echo "Unsupported verdict value: $verdict (expected APPROVE|REQUEST_CHANGES|NONE)." >&2
+              exit 1
+              ;;
+          esac
 
           {
             echo
@@ -885,6 +918,8 @@ jobs:
           {
             echo "summary_file_written=$summary_file_written"
             echo "inline_reply_posted=$inline_reply_posted"
+            echo "verdict=$verdict"
+            printf 'verdict_reason=%s\n' "$verdict_reason"
           } >> "$GITHUB_OUTPUT"
 
           if [ "$success" != "true" ]; then
@@ -1020,6 +1055,181 @@ jobs:
                   raise SystemExit("No new Claude inline reply was posted.")
           else:
               raise SystemExit(f"Unsupported trigger type {trigger_type}")
+          PY
+
+      - name: Submit Claude formal review
+        if: ${{ steps.claude-parse.outputs.verdict == 'APPROVE' || steps.claude-parse.outputs.verdict == 'REQUEST_CHANGES' }}
+        env:
+          GH_TOKEN: ${{ env.REVIEW_GH_TOKEN }}
+          VERDICT: ${{ steps.claude-parse.outputs.verdict }}
+          VERDICT_REASON: ${{ steps.claude-parse.outputs.verdict_reason }}
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          pr_number = os.environ["TARGET_PR_NUMBER"]
+          verdict = os.environ["VERDICT"]
+          reason = (os.environ.get("VERDICT_REASON") or "").strip()
+          owner, name = repo.split("/", 1)
+
+          def gh_json(*args):
+              return json.loads(subprocess.check_output(["gh", "api", *args], text=True))
+
+          def gh_json_paginated(path):
+              # Returns the concatenated list of pages as a single JSON array of
+              # response objects. Caller is responsible for flattening the list
+              # field they care about.
+              return json.loads(
+                  subprocess.check_output(
+                      ["gh", "api", "--paginate", "--slurp", path], text=True
+                  )
+              )
+
+          # Gate 1: zero unresolved review threads. Paginate until hasNextPage=false
+          # so a 101st thread doesn't get missed on large PRs.
+          query = (
+              "query($owner:String!,$name:String!,$number:Int!,$cursor:String){"
+              "repository(owner:$owner,name:$name){pullRequest(number:$number){"
+              "reviewThreads(first:100,after:$cursor){"
+              "nodes{isResolved}"
+              "pageInfo{hasNextPage endCursor}"
+              "}}}}"
+          )
+          threads = []
+          cursor = None
+          while True:
+              args = [
+                  "graphql",
+                  "-f", f"query={query}",
+                  "-f", f"owner={owner}",
+                  "-f", f"name={name}",
+                  "-F", f"number={pr_number}",
+              ]
+              if cursor is not None:
+                  args.extend(["-f", f"cursor={cursor}"])
+              page = gh_json(*args)
+              rt = (
+                  page.get("data", {})
+                  .get("repository", {})
+                  .get("pullRequest", {})
+                  .get("reviewThreads", {})
+                  or {}
+              )
+              threads.extend(rt.get("nodes", []) or [])
+              page_info = rt.get("pageInfo", {}) or {}
+              if not page_info.get("hasNextPage"):
+                  break
+              cursor = page_info.get("endCursor")
+          unresolved = sum(1 for t in threads if not t.get("isResolved"))
+          print(f"Review threads: total={len(threads)} unresolved={unresolved}")
+
+          # Gate 2: every signal on the head commit must be passing — both the new
+          # check-runs API AND the older statuses API (status contexts like
+          # `policy-bot: main`, GitGuardian webhooks, etc., flow through statuses
+          # only). Exclude this Code Review workflow's own check-runs so we don't
+          # deadlock against ourselves.
+          pr = gh_json(f"repos/{repo}/pulls/{pr_number}")
+          head_sha = pr["head"]["sha"]
+          excluded_names = {
+              "Welcome message",
+              "Resolve review context",
+              "Claude direct CLI code review",
+              "Codex direct CLI code review",
+          }
+          check_runs_pages = gh_json_paginated(
+              f"repos/{repo}/commits/{head_sha}/check-runs?per_page=100"
+          )
+          all_check_runs = []
+          for page in check_runs_pages:
+              all_check_runs.extend(page.get("check_runs", []) or [])
+          other_runs = [
+              r for r in all_check_runs
+              if r.get("name") not in excluded_names
+          ]
+          non_passing_checks = [
+              r for r in other_runs
+              if r.get("status") != "completed"
+              or r.get("conclusion") not in ("success", "skipped", "neutral")
+          ]
+          print(
+              "Other check-runs: total={total} non_passing={n}".format(
+                  total=len(other_runs), n=len(non_passing_checks)
+              )
+          )
+          for r in non_passing_checks[:10]:
+              print(
+                  "  - check-run: {name} status={s} conclusion={c}".format(
+                      name=r.get("name"), s=r.get("status"), c=r.get("conclusion")
+                  )
+              )
+
+          status = gh_json(f"repos/{repo}/commits/{head_sha}/status")
+          status_contexts = status.get("statuses", []) or []
+          # policy-bot depends on the formal review state that this step is
+          # about to update. Requiring it here deadlocks when replacing an old
+          # changes-requested review with an approval.
+          excluded_status_contexts = {"policy-bot: main"}
+          non_passing_statuses = [
+              s for s in status_contexts
+              if s.get("context") not in excluded_status_contexts
+              and s.get("state") != "success"
+          ]
+          combined_state = status.get("state")
+          print(
+              "Status contexts: total={total} non_passing={n} combined_state={cs}".format(
+                  total=len(status_contexts), n=len(non_passing_statuses), cs=combined_state
+              )
+          )
+          for s in non_passing_statuses[:10]:
+              print(
+                  "  - status: {ctx} state={st}".format(
+                      ctx=s.get("context"), st=s.get("state")
+                  )
+              )
+
+          non_passing = non_passing_checks + non_passing_statuses
+
+          if verdict == "APPROVE":
+              if unresolved > 0:
+                  print(
+                      f"::warning::Claude verdict=APPROVE but {unresolved} unresolved review thread(s); skipping formal approval."
+                  )
+                  sys.exit(0)
+              if non_passing:
+                  print(
+                      f"::warning::Claude verdict=APPROVE but {len(non_passing)} non-passing signal(s) on head SHA; skipping formal approval."
+                  )
+                  sys.exit(0)
+              event = "--approve"
+              body = (
+                  "AI review (finn-claude): verdict=APPROVE.\n\n"
+                  f"Reason: {reason or '(no reason provided)'}\n\n"
+                  f"Gates: review threads {len(threads)} total / 0 unresolved; "
+                  f"check-runs {len(other_runs)}; status contexts {len(status_contexts)}; "
+                  "all signals passing."
+              )
+          else:
+              event = "--request-changes"
+              body = (
+                  "AI review (finn-claude): verdict=REQUEST_CHANGES.\n\n"
+                  f"Reason: {reason or '(no reason provided)'}"
+              )
+
+          print(f"Submitting formal review: {event}")
+          subprocess.check_call(
+              ["gh", "pr", "review", str(pr_number), "--repo", repo, event, "--body", body]
+          )
+
+          # Surface the verdict as the check-run conclusion so agents reading
+          # /check-runs see "failure" instead of green when changes are requested.
+          # The formal review API blocks merge separately; this aligns the signals.
+          if verdict == "REQUEST_CHANGES":
+              sys.exit(1)
           PY
 
   codex-direct-cli:
@@ -1356,7 +1566,11 @@ jobs:
       - name: Install Codex CLI
         run: |
           set -euo pipefail
-          npm install -g --ignore-scripts "@openai/codex@${CODEX_POC_VERSION}"
+          if [[ "$CODEX_POC_VERSION" != "0.114.0" ]]; then
+            echo "::error::Unsupported Codex CLI version: $CODEX_POC_VERSION. Update the pinned npm install before changing it." >&2
+            exit 1
+          fi
+          npm install -g --ignore-scripts "@openai/codex@0.114.0"
           codex --version
 
       - name: Configure Codex authentication

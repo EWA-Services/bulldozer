@@ -11,9 +11,7 @@ on:
       - reopened
       - synchronize
 
-permissions:
-  pull-requests: write
-  issues: write
+permissions: {}
 
 jobs:
   pr_description:
@@ -25,6 +23,9 @@ jobs:
     continue-on-error: true
     name: Validate Required PR Description
     runs-on: finn-runners
+    permissions:
+      pull-requests: write
+      issues: write
     steps:
       - name: Validate Pull request description
         id: validation
@@ -243,6 +244,8 @@ jobs:
     # It means that it will allow the workflow to continue even if the job fails.
     # This is useful for the semantic-pr job to continue even if the pr_description job fails.
     continue-on-error: true
+    permissions:
+      pull-requests: read
     steps:
       - uses: amannn/action-semantic-pull-request@v5
         # yamllint disable rule:line-length
@@ -263,6 +266,12 @@ jobs:
             revert
             style
             test
+          # Reject subjects that start with a second conventional-commit header,
+          # e.g. "feat: test: ..." or "fix: feat(scope): ...".
+          subjectPattern: "^(?!(?:build|chore|ci|docs|feat|fix|perf|refactor|release|revert|style|test)(?:\\([^)]*\\))?(?:!)?: ).+"
+          subjectPatternError: |
+            The subject "{subject}" in PR title "{title}" starts with another conventional commit prefix.
+            Use a single conventional commit prefix, for example "feat: Add login validation [ENG-123]".
           # yamllint enable rule:line-length
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
