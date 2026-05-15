@@ -60,8 +60,9 @@ func (h *CheckRun) Handle(ctx context.Context, eventType, deliveryID string, pay
 	prs := event.GetCheckRun().PullRequests
 	if len(prs) == 0 {
 		logger.Debug().Msg("No pull requests associated with the check run, searching by SHA")
-		// check runs on fork PRs do not have the PRs attached to the event so we need to filter all PRs by SHA
-		prs, err = pull.ListAllOpenPullRequestsFilteredBySHA(ctx, client.PullRequests, owner, repoName, event.GetCheckRun().GetHeadSHA())
+		// check runs on fork PRs do not have the PRs attached to the event, so look up PRs by commit SHA first
+		// and only fall back to listing all open PRs when GitHub has no commit association.
+		prs, err = pull.GetAllPossibleOpenPullRequestsForSHA(ctx, client.PullRequests, owner, repoName, event.GetCheckRun().GetHeadSHA())
 		if err != nil {
 			return errors.Wrap(err, "failed to determine open pull requests matching the status context change")
 		}
