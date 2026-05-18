@@ -49,6 +49,7 @@ jobs:
           MARKED="\[x\] I have"
 
           # Convert to lowercase for case-insensitive matching
+          ORIGINAL_BODY=$BODY
           BODY=${BODY,,}
 
           CHECKED_COUNT=$(echo "$BODY" | grep -ic "$MARKED" || true)
@@ -148,8 +149,19 @@ jobs:
                 "https://api.github.com/repos/$REPOSITORY/issues/$PR_NUMBER/comments" | \
                 jq -r '.[] | select(.user.login == "linear[bot]") | .id' | head -1)
 
-              if [[ -n "$LINEAR_BOT_COMMENT" ]]; then
-                  echo "✅ Linear bot comment found, PR is properly linked to Linear issue"
+              # Also accept an explicit issue reference in the branch, title, or body.
+              # This matches the human-facing guidance below and avoids coupling this
+              # gate to Linear bot comment timing.
+              LINEAR_ISSUE_REF=$(printf '%s\n%s\n%s\n' "$PR_HEAD_BRANCH" "$PR_TITLE" "$ORIGINAL_BODY" | \
+                grep -Eo '(^|[^[:alnum:]])[A-Z][A-Z0-9]+-[0-9]+([^[:alnum:]]|$)' | \
+                grep -Eo '[A-Z][A-Z0-9]+-[0-9]+' | head -1 || true)
+
+              if [[ -n "$LINEAR_BOT_COMMENT" || -n "$LINEAR_ISSUE_REF" ]]; then
+                  if [[ -n "$LINEAR_BOT_COMMENT" ]]; then
+                      echo "✅ Linear bot comment found, PR is properly linked to Linear issue"
+                  else
+                      echo "✅ Linear issue reference found: $LINEAR_ISSUE_REF"
+                  fi
                   VALIDATION_RESULT+="✅ **Linear Ticket:** Properly linked"$'\n'
               else
                   echo "❌ No Linear bot comment found. Please ensure the PR is properly linked to a Linear issue."
@@ -173,7 +185,7 @@ jobs:
                   if [[ $CHECKED_COUNT -lt 2 ]]; then
                       VALIDATION_RESULT+="- Please check at least 2 checkboxes in the PR description"$'\n'
                   fi
-                  if [[ -z "$LINEAR_BOT_COMMENT" ]]; then
+                  if [[ -z "$LINEAR_BOT_COMMENT" && -z "$LINEAR_ISSUE_REF" ]]; then
                       VALIDATION_RESULT+="- Please link this PR to a Linear issue (see options above)"$'\n'
                   fi
               fi
