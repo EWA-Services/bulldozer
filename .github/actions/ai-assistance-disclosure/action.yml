@@ -1,0 +1,19 @@
+---
+name: AI Label Check
+description: Validate PR AI usage labels and body sections.
+
+inputs:
+  github-token:
+    description: GitHub token used to seed labels and comment on PRs.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Validate AI usage details
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const action = require(`${process.env.GITHUB_ACTION_PATH}/ai_assistance_disclosure.js`);
+          await action.run({ github, context, core });
