@@ -18,17 +18,12 @@ permissions: {}
 
 jobs:
   ai-assistance-disclosure:
-    name: AI Label Check
-    runs-on: ubuntu-latest
+    uses: EWA-Services/EWA-Actions/.github/workflows/shareable-ai-label-check.yml@main
     permissions:
       contents: read
       pull-requests: write
       issues: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-
-      - name: Validate AI usage details
-        uses: ./.github/actions/ai-assistance-disclosure
-        with:
-          github-token: ${{ github.token }}
+    with:
+      actions_ref: main
+    secrets:
+      FINN_AI_CODER_GITHUB_APP_PRIVATE_KEY: ${{ secrets.FINN_AI_CODER_GITHUB_APP_PRIVATE_KEY }}
