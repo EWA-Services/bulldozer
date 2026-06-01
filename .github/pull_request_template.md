@@ -16,29 +16,47 @@ INSTRUCTIONS FOR CODEX AND OTHER CODING AGENTS:
 
 If any non-trivial portion of this PR (code, tests, plan, refactor) was AI-generated or AI-guided:
 1. Apply the `ai-assisted` label.
-2. Fill the "Workflow trace" section below as a Markdown bullet list. Use emoji markers where they make scanning easier:
+2. Keep only the `### Workflow trace` subsection in the final PR body.
+3. Fill `### Workflow trace` as a Markdown bullet list. Use emoji markers where they make scanning easier:
    - 💬 Prompt: the substantive prompt(s) the human gave you
    - 🛠️ Built: a brief summary of what you produced
    - 🔁 Adjusted: any human-directed adjustments made before opening this PR
    - ✅ Verified: tests, checks, or review gates run
-3. Leave "Why not AI-assisted" empty.
+4. Delete the whole `### Why not AI-assisted` subsection, including its heading and placeholder body.
 
 If this PR was written entirely without AI assistance:
 1. Apply the `not-ai-assisted` label.
-2. Fill the "Why not AI-assisted" section with a one-sentence reason.
-3. Leave "Workflow trace" empty.
+2. Keep only the `### Why not AI-assisted` subsection in the final PR body.
+3. Fill `### Why not AI-assisted` with a one-sentence reason.
+4. Delete the whole `### Workflow trace` subsection, including its heading and placeholder body.
 
 Exactly one label is required, and the matching section must have at least 50 non-whitespace characters.
 For `ai-assisted`, "Workflow trace" must be a readable bullet list.
-The AI Label Check enforces this and will block merge if violated.
+The final PR body must contain exactly one AI Assistance subsection. Do not leave the unused subsection as an empty heading.
+The AI Label Check enforces the required label, matching section content, and bullet-list format.
 
 Full operating model: https://www.notion.so/362032aabccd8145964ff3b40790b4c7
 -->
 
+<!--
+For `ai-assisted` PRs, replace this comment with:
+
 ### Workflow trace
 
-<!-- Fill if `ai-assisted`. Codex agents: use readable bullets with emoji markers where possible. -->
+- 💬 Prompt:
+- 🛠️ Built:
+- 🔁 Adjusted:
+- ✅ Verified:
+
+Delete the `Why not AI-assisted` option below before opening or updating the PR.
+-->
+
+<!--
+For `not-ai-assisted` PRs, replace this comment with:
 
 ### Why not AI-assisted
 
-<!-- Fill if `not-ai-assisted`. One sentence is fine. -->
+This PR was written without AI assistance because ...
+
+Delete the `Workflow trace` option above before opening or updating the PR.
+-->
