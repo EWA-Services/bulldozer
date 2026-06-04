@@ -15,6 +15,7 @@ on:
   pull_request:
     types:
       - opened
+      - ready_for_review
       - reopened
   # checkov:skip=CKV_GHA_7: "Manual workflow_dispatch inputs are required for operator validation and debugging."
   workflow_dispatch:
@@ -22,11 +23,9 @@ on:
       provider:
         description: Which direct CLI reviewer to run
         required: true
-        default: both
+        default: codex
         type: choice
         options:
-          - both
-          - claude
           - codex
       pr_number:
         description: Pull request number to review or respond on
@@ -52,7 +51,12 @@ on:
         default: manual-dispatch
         type: string
       comment_id:
-        description: Existing inline review comment ID when trigger_type is inline_comment
+        description: Existing PR or inline review comment ID for comment-driven runs
+        required: false
+        default: ""
+        type: string
+      parent_comment_id:
+        description: Parent comment ID when simulating a threaded comment reply
         required: false
         default: ""
         type: string
@@ -66,36 +70,26 @@ on:
         required: false
         default: ""
         type: string
-      claude_version:
-        description: Claude Code version to install for direct CLI runs (npm dist-tag or exact version)
-        required: true
-        default: 2.1.73
-        type: string
-      claude_model:
-        description: Claude model to use for direct CLI runs
-        required: true
-        default: claude-opus-4-7
-        type: string
-      claude_effort:
-        description: Claude effort level for direct CLI runs (low|medium|high|xhigh|max)
-        required: true
-        default: max
-        type: string
       codex_version:
-        description: Codex CLI version to install for direct CLI runs (npm dist-tag or exact version)
+        description: Codex CLI version to install for direct CLI runs (latest or exact semver)
         required: true
-        default: 0.114.0
+        default: latest
         type: string
       codex_model:
         description: Codex model to use for direct CLI runs
         required: true
-        default: gpt-5.4
+        default: gpt-5.5
         type: string
       codex_reasoning_effort:
         description: Codex reasoning effort for direct CLI runs (none|low|medium|high|xhigh)
         required: true
         default: xhigh
         type: string
+      allow_code_push:
+        description: Allow Codex to commit and push scoped PR fixes for this dispatch
+        required: false
+        default: false
+        type: boolean
 
 permissions: {}
 
@@ -110,25 +104,25 @@ jobs:
       pull-requests: write
     with:
       actions_ref: main
-      provider: ${{ inputs.provider || 'both' }}
+      provider: ${{ inputs.provider || 'codex' }}
       pr_number: ${{ inputs.pr_number || '' }}
       trigger_type: ${{ inputs.trigger_type || 'pr_event' }}
       comment_body: ${{ inputs.comment_body || '' }}
       comment_author: ${{ inputs.comment_author || 'manual-dispatch' }}
       comment_id: ${{ inputs.comment_id || '' }}
+      parent_comment_id: ${{ inputs.parent_comment_id || '' }}
       file_path: ${{ inputs.file_path || '' }}
       line_number: ${{ inputs.line_number || '' }}
-      claude_version: ${{ inputs.claude_version || '2.1.73' }}
-      claude_model: ${{ inputs.claude_model || 'claude-opus-4-7' }}
-      claude_effort: ${{ inputs.claude_effort || 'max' }}
-      codex_version: ${{ inputs.codex_version || '0.114.0' }}
-      codex_model: ${{ inputs.codex_model || 'gpt-5.4' }}
+      codex_version: ${{ inputs.codex_version || 'latest' }}
+      codex_model: ${{ inputs.codex_model || 'gpt-5.5' }}
       codex_reasoning_effort: ${{ inputs.codex_reasoning_effort || 'xhigh' }}
+      allow_code_push: ${{ inputs.allow_code_push || false }}
     secrets:
       FINN_DEVOPS_PERSONAL_ACCESS_TOKEN: ${{ secrets.FINN_DEVOPS_PERSONAL_ACCESS_TOKEN }}
-      CLAUDE_REVIEW_GH_TOKEN: ${{ secrets.CLAUDE_REVIEW_GH_TOKEN }}
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       PPLX_API_KEY: ${{ secrets.PPLX_API_KEY }}
       CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
       FINN_AI_CODER_GITHUB_APP_PRIVATE_KEY: ${{ secrets.FINN_AI_CODER_GITHUB_APP_PRIVATE_KEY }}
+      GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+      GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+      GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
 # yamllint enable rule:line-length

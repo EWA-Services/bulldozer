@@ -54,6 +54,17 @@ jobs:
 
           CHECKED_COUNT=$(echo "$BODY" | grep -ic "$MARKED" || true)
 
+          if [[ "$PR_AUTHOR" == "dependabot[bot]" ]]; then
+              echo "🤖 Skipping PR description validation for Dependabot PR."
+              VALIDATION_RESULT="✅ **Dependabot PR detected** - PR description validation skipped for dependency automation"$'\n\n'
+              VALIDATION_RESULT+="Safety checks remain enforced by repository rules and PolicyBot."$'\n'
+              echo "VALIDATION_RESULT<<EOF" >> $GITHUB_ENV
+              echo "$VALIDATION_RESULT" >> $GITHUB_ENV
+              echo "EOF" >> $GITHUB_ENV
+              echo "VALIDATION_STATUS=success" >> $GITHUB_ENV
+              exit 0
+          fi
+
           # Skip validation for release PRs with enhanced security checks
           # 1. Must be authored by finn-devops
           # 2. Must have release title format
@@ -144,10 +155,13 @@ jobs:
           else
               echo "👤 Checking Linear ticket requirement for user: $PR_AUTHOR"
 
-              # Check if Linear bot has commented on the PR (indicating proper Linear linking)
+              # Check if Linear bot has commented on the PR (indicating proper Linear linking).
+              # Linear ships its GitHub app under two account names: the legacy `linear[bot]`
+              # and the newer `linear-code[bot]`. Accept either so the renamed app does
+              # not silently fail every PR's description validation.
               LINEAR_BOT_COMMENT=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
                 "https://api.github.com/repos/$REPOSITORY/issues/$PR_NUMBER/comments" | \
-                jq -r '.[] | select(.user.login == "linear[bot]") | .id' | head -1)
+                jq -r '.[] | select(.user.login == "linear[bot]" or .user.login == "linear-code[bot]") | .id' | head -1)
 
               # Also accept an explicit issue reference in the branch, title, or body.
               # This matches the human-facing guidance below and avoids coupling this
@@ -259,7 +273,11 @@ jobs:
     permissions:
       pull-requests: read
     steps:
+      - name: Skip semantic title validation for Dependabot PR
+        if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
+        run: echo "✅ Dependabot PR detected - semantic title validation skipped for dependency automation."
       - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50  # v6.1.1
+        if: ${{ github.event.pull_request.user.login != 'dependabot[bot]' }}
         # yamllint disable rule:line-length
         with:
           # Default types can be found here:
