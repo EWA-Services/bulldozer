@@ -33,7 +33,7 @@ jobs:
           CACHE_KEY_PREFIX: ${{ runner.os }}-${{ github.repository }}-${{ github.workflow }}
         with:
           path: |
-            ${{ env.HOME }}/.cache/pre-commit/
+            ~/.cache/pre-commit/
           key: ${{ env.CACHE_KEY_PREFIX }}-${{ hashFiles('.pre-commit-config.yaml') }}
           restore-keys: |
             ${{ env.CACHE_KEY_PREFIX }}-
@@ -49,6 +49,10 @@ jobs:
           HEAD_SHA: ${{ github.sha }}
         run: |
           echo "Diffing from $BASE_SHA to $HEAD_SHA"
+          if [[ -z "${GITGUARDIAN_API_KEY}" ]]; then
+            echo "GITGUARDIAN_API_KEY is not configured; skipping ggshield pre-commit hook."
+            export SKIP="${SKIP:+$SKIP,}ggshield"
+          fi
           pre-commit run --from-ref "$BASE_SHA" --to-ref "$HEAD_SHA" --show-diff-on-failure
 
       - name: Generate diff patch
@@ -71,5 +75,5 @@ jobs:
           CACHE_KEY_PREFIX: ${{ runner.os }}-${{ github.repository }}-${{ github.workflow }}
         with:
           path: |
-            ${{ env.HOME }}/.cache/pre-commit/
+            ~/.cache/pre-commit/
           key: ${{ env.CACHE_KEY_PREFIX }}-${{ hashFiles('.pre-commit-config.yaml') }}
