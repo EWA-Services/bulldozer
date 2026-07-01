@@ -90,12 +90,10 @@ while IFS= read -r pr; do
     continue
   fi
 
-  export GIT_SEQUENCE_EDITOR=':'
-
   rebase_log="${runner_temp}/auto-rebase-${pr_number}.log"
-  rebase_command=(git rebase -i --committer-date-is-author-date)
+  rebase_command=(git rebase --committer-date-is-author-date --empty=drop)
   if [[ "${auto_rebase_sign_commits}" == "true" ]]; then
-    rebase_command+=(--exec 'git commit --amend --no-edit --gpg-sign')
+    rebase_command+=(--gpg-sign)
   fi
   rebase_command+=("origin/${base_ref}")
 
