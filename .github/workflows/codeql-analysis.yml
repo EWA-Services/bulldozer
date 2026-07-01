@@ -13,7 +13,7 @@ jobs:
     permissions:
       security-events: write
     name: Analyze
-    runs-on: ubuntu-latest
+    runs-on: ubicloud-standard-2
 
     strategy:
       fail-fast: false
