@@ -13,7 +13,7 @@ permissions:
 jobs:
   rebase:
     if: github.ref_type == 'branch' && github.ref_name == github.event.repository.default_branch
-    runs-on: finn-runners
+    runs-on: ubicloud-standard-2
     steps:
       - name: Setup GPG for signed commits
         uses: EWA-Services/EWA-Actions/.github/actions/verified-commit@main
@@ -23,14 +23,14 @@ jobs:
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
         with:
           token: ${{ secrets.FINN_DEVOPS_PERSONAL_ACCESS_TOKEN }}
           fetch-depth: 0
 
       - name: Get open PRs
         id: prs
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         with:
           github-token: ${{ secrets.FINN_DEVOPS_PERSONAL_ACCESS_TOKEN }}
           script: |
@@ -63,7 +63,7 @@ jobs:
 
       - name: Comment on rebase failures
         if: steps.rebase-prs.outputs.failed_count != '0'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         env:
           FAILURES_FILE: ${{ steps.rebase-prs.outputs.failures_file }}
         with:
