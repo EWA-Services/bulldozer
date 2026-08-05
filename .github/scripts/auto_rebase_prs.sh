@@ -64,6 +64,12 @@ while IFS= read -r pr; do
 
   echo "Processing PR #${pr_number} (${head_ref})"
 
+  if [[ "${head_ref}" == sync_workflow_files* ]]; then
+    echo "Skipping PR #${pr_number} because sync branches must retain original commit provenance"
+    skipped_count=$((skipped_count + 1))
+    continue
+  fi
+
   if [[ -n "${github_repository}" && "${head_repo}" != "${github_repository}" ]]; then
     echo "Skipping PR #${pr_number} because the branch is in ${head_repo}"
     skipped_count=$((skipped_count + 1))
@@ -74,6 +80,13 @@ while IFS= read -r pr; do
     echo "Failed to fetch PR #${pr_number}" >&2
     failed_count=$((failed_count + 1))
     record_failure "${pr_number}" "${head_ref}" "fetch_failed" "Could not fetch origin/${head_ref}."
+    continue
+  fi
+
+  if git diff --name-only "origin/${base_ref}...origin/${head_ref}" |
+    grep -Eq '^(\.devcontainer/|\.github/scripts/environment-harness/|\.github/workflows/environment-harness\.ya?ml$)'; then
+    echo "Skipping PR #${pr_number} because Environment Harness PRs require contributor-supplied updates"
+    skipped_count=$((skipped_count + 1))
     continue
   fi
 
