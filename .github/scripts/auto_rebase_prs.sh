@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# This file is synchronized from EWA-Services/EWA-Actions
+# Do not modify this file directly, all changes will be lost/overwritten
 set -uo pipefail
 
 prs_json="${PRS_JSON:-[]}"
