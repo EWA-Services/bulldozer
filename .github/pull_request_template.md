@@ -6,7 +6,11 @@
 - [ ] I have linked a ticket to this PR (e.g., "feat: Add foo [[TICKET-123](https://linear.app/company/issue/TICKET-123/some-description)]")
 
 ## Description
-<!-- Provide a clear and concise description of the changes in this PR -->
+<!--
+PR Description (agents and humans):
+- Write what changed and why it exists. After one read, a reviewer who does not have the ticket open must be able to repeat both.
+- The author writes those words and reads every line. A ticket id, a slice number, or an agent trace is not a description.
+-->
 <!-- Backend/Frontend: GrowthBook Link (feature flag or experiment): https://app.growthbook.io/... -->
 
 ## AI Assistance
