@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.5-finn.1](https://github.com/EWA-Services/bulldozer/compare/v1.19.4-finn.1...v1.19.5-finn.1) (2026-08-29)
+
+
+### Bug Fixes
+
+* **policy:** migrate reviewer teams without changing approvals [ENG-1805] ([#586](https://github.com/EWA-Services/bulldozer/issues/586)) ([#31](https://github.com/EWA-Services/bulldozer/issues/31)) ([90afe26](https://github.com/EWA-Services/bulldozer/commit/90afe26130553da1daca864db158b18ade21133e))
+
 ## [1.19.4-finn.1](https://github.com/EWA-Services/bulldozer/compare/v1.19.3-finn.1...v1.19.4-finn.1) (2026-05-19)
 
 
