@@ -12,7 +12,7 @@ on:
 
 jobs:
   Verify:
-    runs-on: ubicloud-standard-2
+    runs-on: finn-runners
 
     env:
       GOPATH: /home/runner/go
@@ -45,7 +45,7 @@ jobs:
         run: ./godelw verify --apply=false
 
   Dist:
-    runs-on: ubicloud-standard-2
+    runs-on: finn-runners
     permissions:
       contents: write
 
@@ -101,7 +101,7 @@ jobs:
           ./godelw publish github --add-v-prefix --api-url="${GITHUB_API_URL}" --user="${GITHUB_REPOSITORY_OWNER}" --repository="${repo_name}" --token="${{ secrets.GITHUB_TOKEN }}"
 
   ci-all:
-    runs-on: ubicloud-standard-2
+    runs-on: finn-runners
     if: ${{ !cancelled() }}
     needs:
       - Verify
