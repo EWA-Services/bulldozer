@@ -20,3 +20,8 @@ merge:
   # blind-merge fallback for ruleset-protected repos is no longer needed.
   # Upstream issue: https://github.com/palantir/bulldozer/issues/617
   allow_merge_with_no_checks: false
+
+# Auto Rebase is off org-wide; bulldozer merges main into behind automerge PRs (GitHub signs these merge commits).
+update:
+  trigger:
+    labels: [automerge]
