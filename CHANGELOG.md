@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.0-finn.1](https://github.com/EWA-Services/bulldozer/compare/v1.19.5-finn.1...v1.20.0-finn.1) (2026-10-07)
+
+
+### Features
+
+* **policy:** request one approver and one capability reviewer [ENG-3035] ([#992](https://github.com/EWA-Services/bulldozer/issues/992)) ([#40](https://github.com/EWA-Services/bulldozer/issues/40)) ([9217120](https://github.com/EWA-Services/bulldozer/commit/921712000b2c7db2b437736dcc963a01e5325b6e))
+
 ## [1.19.5-finn.1](https://github.com/EWA-Services/bulldozer/compare/v1.19.4-finn.1...v1.19.5-finn.1) (2026-10-04)
 
 
