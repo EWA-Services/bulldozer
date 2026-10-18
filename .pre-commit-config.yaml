@@ -17,10 +17,9 @@ repos:
     hooks:
       - id: yamllint
 
-  # GitGuardian secret scanning
-  - repo: https://github.com/gitguardian/ggshield
-    rev: v1.43.0
+  # Kingfisher secret scanning; uses the shared EWA-Actions scanner.
+  - repo: https://github.com/mongodb/kingfisher
+    rev: v1.108.0
     hooks:
-      - id: ggshield
-        language_version: python3
+      - id: kingfisher
         stages: [pre-commit]
