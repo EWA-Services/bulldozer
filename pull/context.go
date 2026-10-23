@@ -34,6 +34,9 @@ type Context interface {
 	// Number returns the pull request number.
 	Number() int
 
+	// Author returns the login of the user who opened the pull request.
+	Author() string
+
 	// Locator returns a locator string for the pull request. The locator
 	// string is formatted as "<owner>/<repository>#<number>"
 	Locator() string

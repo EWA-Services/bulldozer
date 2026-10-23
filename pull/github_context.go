@@ -80,6 +80,10 @@ func (ghc *GithubContext) Number() int {
 	return ghc.number
 }
 
+func (ghc *GithubContext) Author() string {
+	return ghc.pr.GetUser().GetLogin()
+}
+
 func (ghc *GithubContext) Locator() string {
 	return fmt.Sprintf("%s/%s#%d", ghc.owner, ghc.repo, ghc.number)
 }

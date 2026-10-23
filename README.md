@@ -45,6 +45,13 @@ Bulldozer might be useful if you:
 
 ## Behavior
 
+This fork keeps dependency pull requests for manual merging. Bulldozer never
+merges PRs opened by `dependabot[bot]` or using dependency update titles, even
+when the trigger or ignore configuration would allow it. Dependency titles
+include `<type>(deps):`, `<type>(deps-dev):`, numeric `Bump <package> from <version>
+to <version>` updates, and `Bump the <name> group ... with <count> updates`.
+GitHub native auto-merge is a separate service; this guard controls Bulldozer.
+
 `bulldozer` will only merge pull requests that GitHub allows non-admin
 collaborators to merge. This means that all branch protection settings,
 including required status checks and required reviews, are respected. It also
@@ -297,10 +304,11 @@ options:
 
 #### Bulldozer isn't merging my commit when it should, what could be happening?
 
-Bulldozer will attempt to merge a branch whenever it passes the trigger/ignore
-criteria. GitHub may prevent it from merging a branch in certain conditions, some of
+Bulldozer attempts to merge branches that pass the trigger/ignore criteria,
+except dependency pull requests, which require manual merging. GitHub may prevent it from merging a branch in certain conditions, some of
 which are to be expected, and others that may be caused by mis-configuring Bulldozer.
 
+* The PR is a dependency update and requires manual merging
 * Required status checks have not passed
 * Review requirements are not satisfied
 * The merge strategy configured in `.bulldozer.yml` is not allowed by your
