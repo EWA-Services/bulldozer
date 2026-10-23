@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.1-finn.1](https://github.com/EWA-Services/bulldozer/compare/v1.20.0-finn.1...v1.20.1-finn.1) (2026-10-23)
+
+
+### Bug Fixes
+
+* Block automatic merging for Dependabot PRs [ENG-3222] ([#57](https://github.com/EWA-Services/bulldozer/issues/57)) ([32746b6](https://github.com/EWA-Services/bulldozer/commit/32746b6a436ebff9f0ca91a4954ecd4bde50f59a))
+
 ## [1.20.0-finn.1](https://github.com/EWA-Services/bulldozer/compare/v1.19.5-finn.1...v1.20.0-finn.1) (2026-10-07)
 
 
