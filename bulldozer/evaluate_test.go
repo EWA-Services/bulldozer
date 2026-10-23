@@ -19,11 +19,100 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/go-github/v84/github"
+	"github.com/palantir/bulldozer/pull"
 	"github.com/palantir/bulldozer/pull/pulltest"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestDependabotIsNotMergedByBulldozer(t *testing.T) {
+	for _, labels := range [][]string{{"automerge"}, {"automerge", "dependencies"}, nil} {
+		pullContext := &pulltest.MockPullContext{
+			AuthorValue:           "dependabot[bot]",
+			LabelValue:            labels,
+			RequiredStatusesValue: []string{"CI"},
+			SuccessStatusesValue:  []string{"CI"},
+			AutoMergeValue:        true,
+		}
+		allowed, err := ShouldMergePR(context.Background(), pullContext, MergeConfig{
+			Trigger: Signals{Labels: []string{"automerge"}, AutoMerge: true},
+		})
+		require.NoError(t, err)
+		assert.False(t, allowed)
+	}
+
+	pullContext := pull.NewGithubContext(nil, &github.PullRequest{
+		User: &github.User{Login: github.Ptr("dependabot[bot]")},
+	})
+	allowed, err := ShouldMergePR(context.Background(), pullContext, MergeConfig{AllowMergeWithNoChecks: true})
+	require.NoError(t, err)
+	assert.False(t, allowed)
+}
+
+func TestHumanAutomergeRemainsAvailable(t *testing.T) {
+	pullContext := &pulltest.MockPullContext{
+		AuthorValue:           "jai",
+		LabelValue:            []string{"automerge"},
+		RequiredStatusesValue: []string{"CI"},
+		SuccessStatusesValue:  []string{"CI"},
+	}
+	allowed, err := ShouldMergePR(context.Background(), pullContext, MergeConfig{
+		Trigger: Signals{Labels: []string{"automerge"}},
+	})
+	require.NoError(t, err)
+	assert.True(t, allowed)
+}
+
+func TestDependencyTitlesRequireManualMerge(t *testing.T) {
+	for _, title := range []string{
+		"ci(deps): pin and update action SHAs",
+		"chore(deps-dev): Bump a development dependency",
+		"build(deps)!: Bump a major dependency",
+		"Bump actions/checkout from 5 to 6",
+		"Bump the all-actions group across 1 directory with 2 updates",
+		"Bump the dev-dependencies group across 2 directories with 6 updates",
+		"Bump the all-actions group with 4 updates",
+		"Bump golang.org/x/net from 0.23.0 to 0.24.0 in /tools",
+		"Bump github.com/foo/bar from v1.2.3 to v1.3.0-rc.1",
+	} {
+		pullContext := &pulltest.MockPullContext{
+			AuthorValue:           "finn-devops",
+			TitleValue:            title,
+			LabelValue:            []string{"automerge"},
+			RequiredStatusesValue: []string{"CI"},
+			SuccessStatusesValue:  []string{"CI"},
+		}
+		allowed, err := ShouldMergePR(context.Background(), pullContext, MergeConfig{
+			Trigger: Signals{Labels: []string{"automerge"}},
+		})
+		require.NoError(t, err)
+		assert.False(t, allowed, title)
+	}
+}
+
+func TestOrdinaryTitlesKeepAutomerge(t *testing.T) {
+	for _, title := range []string{
+		"fix(deps-policy): preserve reviewer routing",
+		"ci(deps-review): update policy checks",
+		"Bump timeout from 30s to 2m",
+		"Bump reviewer count from 1 to 2",
+	} {
+		pullContext := &pulltest.MockPullContext{
+			AuthorValue:           "jai",
+			TitleValue:            title,
+			LabelValue:            []string{"automerge"},
+			RequiredStatusesValue: []string{"CI"},
+			SuccessStatusesValue:  []string{"CI"},
+		}
+		allowed, err := ShouldMergePR(context.Background(), pullContext, MergeConfig{
+			Trigger: Signals{Labels: []string{"automerge"}},
+		})
+		require.NoError(t, err)
+		assert.True(t, allowed, title)
+	}
+}
 
 func TestSimpleXListed(t *testing.T) {
 	mergeConfig := MergeConfig{

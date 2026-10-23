@@ -41,18 +41,24 @@ jobs:
       - name: Install pre-commit
         run: pip install pre-commit
 
+      - name: Install Kingfisher
+        uses: ./.github/finn-ci/.github/actions/install-kingfisher
+      - name: Scan committed pull request changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          kingfisher scan . --redact --no-ignore \
+            --since-commit "$BASE_SHA" --branch "$HEAD_SHA" \
+            --quiet --no-update-check
       - name: Run pre-commit
         id: pre-commit
         env:
-          GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
+          KINGFISHER_CACHE_DIR: /usr/local/bin
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.sha }}
         run: |
           echo "Diffing from $BASE_SHA to $HEAD_SHA"
-          if [[ -z "${GITGUARDIAN_API_KEY}" ]]; then
-            echo "GITGUARDIAN_API_KEY is not configured; skipping ggshield pre-commit hook."
-            export SKIP="${SKIP:+$SKIP,}ggshield"
-          fi
           pre-commit run --from-ref "$BASE_SHA" --to-ref "$HEAD_SHA" --show-diff-on-failure
 
       - name: Generate diff patch

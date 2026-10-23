@@ -16,12 +16,15 @@ package bulldozer
 
 import (
 	"context"
+	"regexp"
 	"strings"
 
 	"github.com/palantir/bulldozer/pull"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
+
+var dependencyPullRequestTitlePattern = regexp.MustCompile(`^[a-z]+\(deps(-dev)?\)!?:|^[Bb]ump \S+ from v?\d+(\.\d+)*([+-]\S+)? to v?\d+(\.\d+)*([+-]\S+)?( in /.*)?$|^[Bb]ump the \S+ group( across [0-9]+ director(y|ies)| in /\S+)? with [0-9]+ updates?$`)
 
 // IsPRIgnored returns true if the PR is identified as ignored,
 // false otherwise. Additionally, a description of the reason will be returned.
@@ -98,6 +101,11 @@ func statusSetDifference(required, actual []string) []string {
 // ShouldMergePR TODO: may want to return a richer type than bool
 func ShouldMergePR(ctx context.Context, pullCtx pull.Context, mergeConfig MergeConfig) (bool, error) {
 	logger := zerolog.Ctx(ctx)
+
+	if pullCtx.Author() == "dependabot[bot]" || dependencyPullRequestTitlePattern.MatchString(pullCtx.Title()) {
+		logger.Info().Msgf("%s is not mergeable because its author or title identifies a dependency update; merge manually", pullCtx.Locator())
+		return false, nil
+	}
 
 	if mergeConfig.Ignore.Enabled() {
 		ignored, reason, err := IsPRIgnored(ctx, pullCtx, mergeConfig.Ignore)

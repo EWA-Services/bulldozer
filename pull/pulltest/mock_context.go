@@ -25,6 +25,7 @@ type MockPullContext struct {
 	OwnerValue  string
 	RepoValue   string
 	NumberValue int
+	AuthorValue string
 
 	TitleValue   string
 	BodyValue    string
@@ -72,6 +73,10 @@ func (c *MockPullContext) Repo() string {
 
 func (c *MockPullContext) Number() int {
 	return c.NumberValue
+}
+
+func (c *MockPullContext) Author() string {
+	return c.AuthorValue
 }
 
 func (c *MockPullContext) Locator() string {
