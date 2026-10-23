@@ -54,6 +54,7 @@ jobs:
       - name: Run pre-commit
         id: pre-commit
         env:
+          KINGFISHER_CACHE_DIR: /usr/local/bin
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.sha }}
         run: |
