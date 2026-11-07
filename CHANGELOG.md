@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.3-finn.1](https://github.com/EWA-Services/bulldozer/compare/v1.20.2-finn.1...v1.20.3-finn.1) (2026-11-07)
+
+
+### Reverts
+
+* Let sync PRs change the PR size workflow without manual approval [DEV-3197] ([#1170](https://github.com/EWA-Services/bulldozer/issues/1170)) ([#65](https://github.com/EWA-Services/bulldozer/issues/65)) ([a58a785](https://github.com/EWA-Services/bulldozer/commit/a58a78570e092df53b9c3025ced4a619511a9cd9))
+
 ## [1.20.2-finn.1](https://github.com/EWA-Services/bulldozer/compare/v1.20.1-finn.1...v1.20.2-finn.1) (2026-11-07)
 
 
